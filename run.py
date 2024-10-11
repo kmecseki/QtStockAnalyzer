@@ -2,14 +2,16 @@ import sys
 import os
 import json
 import pandas as pd
-from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QListWidget, QVBoxLayout, QLabel
+from PyQt5.QtWidgets import QApplication, QWidget, QPushButton, QVBoxLayout, QHBoxLayout, QLabel
 from PyQt5.QtCore import pyqtSignal
 import yfinance as yf
+import TickerWindow
+
 # TODO:
 # Add Info about tickers
+# Save ticker info
 
 cfgfile = "settings.json"
-sp500_tickers = pd.read_csv('https://datahub.io/core/s-and-p-500-companies/r/constituents.csv')
 
 
 def load_settings():
@@ -24,6 +26,7 @@ def save_settings(widget):
     size = widget.size()
     all_data = {"position" : {"x": position.x(), "y": position.y()}}
     all_data["size"] = {"width": size.width(), "height": size.height()}
+    all_data["tickers"] = widget.tickers
     with open(cfgfile, "w") as f:
         json.dump(all_data, f)
 
@@ -36,6 +39,7 @@ class App(QWidget):
 
         self.setWindowTitle("Qt Stock Analyzer")
         settings = load_settings()
+        self.labels = []
 
         if "position" in settings:
             position = settings["position"]
@@ -50,7 +54,12 @@ class App(QWidget):
             self.resize(300, 200)
 
         self.setup_GUI()
-
+        if "tickers" in settings:
+            self.tickers = settings["tickers"]
+            for ticker in self.tickers:
+                self.add_new_ticker(ticker)
+        else:
+            self.tickers = []
 
         self.closeEvent = self.on_close
 
@@ -62,64 +71,38 @@ class App(QWidget):
         self.layout = QVBoxLayout()
         button_Add = QPushButton("Add stocks", self)
         button_Add.setToolTip("Click here to add new stocks")
-        #button_Add.resize(100, 40)
-        #button_Add.move(100, 80)
-        button_Add.clicked.connect(self.open_stockwindow)
-        self.selected_ticker_label = QLabel('No Ticker Selected', self)
         self.layout.addWidget(button_Add)
-        self.layout.addWidget(self.selected_ticker_label)
+        button_Add.clicked.connect(self.open_stockwindow)
         self.setLayout(self.layout)
         
 
     def open_stockwindow(self):
-        self.ticker_listwindow = TickerWindow(self.size(), self.pos())
+        self.ticker_listwindow = TickerWindow.TickerWindow(self.size(), self.pos())
         self.ticker_listwindow.ticker_selected.connect(self.add_new_ticker)
         self.ticker_listwindow.show()
     
     def add_new_ticker(self, ticker):
-        self.selected_ticker_label.setText(f"{ticker}")
-
-
-class TickerWindow(QWidget):
-    ticker_selected = pyqtSignal(str)
-
-    def __init__(self, size, pos):
-        super().__init__()
+        selected_ticker_label = QLabel("", self)
+        remove_button = QPushButton("X", self)
+        templayout = QHBoxLayout()
+        templayout.addWidget(selected_ticker_label)
+        templayout.addWidget(remove_button)
+        remove_button.clicked.connect(lambda: self.remove_ticker(templayout))
+        if ticker not in self.tickers:
+            self.tickers.append(ticker)
+        self.labels.append(templayout)
+        self.layout.addLayout(templayout)
+        selected_ticker_label.setText(f"{ticker}")
         
-        self.setWindowTitle('S&P 500 Ticker List')
-        self.setGeometry(pos.x()-100, pos.y(), size.width(), size.height())
-
-        layout = QVBoxLayout()
-
-        self.list_widget = QListWidget()
-        self.fill_ticker_list()
-
-        self.button_add = QPushButton("Add", self)
-        self.button_add.resize(100, 40)
-        self.button_add.clicked.connect(self.add_stock)
-        selection = self.list_widget.itemClicked.connect(self.list_item_selected)
-        #self.button_add.clicked.connect(self.add_stock(selection))
-        
-        layout.addWidget(self.list_widget)
-        layout.addWidget(self.button_add)
-
-        self.setLayout(layout)
-
-    def fill_ticker_list(self):
-        if os.path.exists('constituents.csv'):
-            tickers = pd.read_csv('constituents.csv')
-            tickers = tickers['Symbol'].tolist()
-        else:
-            tickers = sp500_tickers['Symbol'].tolist()
-        self.list_widget.addItems(tickers)
-
-    def list_item_selected(self):
-        self.ticker = 
-        
-    def add_stock(self, ticker):
-        self.ticker_selected.emit(ticker)
-        self.close()
-    
+    def remove_ticker(self, sublayout):
+        while sublayout.count():
+            item = sublayout.takeAt(0)
+            widget = item.widget()
+            if widget is not None:
+                widget.deleteLater() 
+        self.layout.removeItem(sublayout)
+        self.labels.remove(sublayout)
+        sublayout.deleteLater()
 
 
 if __name__ == '__main__':
