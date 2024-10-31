@@ -2,46 +2,69 @@ import os
 import pandas as pd
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QListWidget, QPushButton
 from PyQt5.QtCore import pyqtSignal
+import EntryPrice
+import time
 
 sp500_tickers = pd.read_csv('https://datahub.io/core/s-and-p-500-companies/r/constituents.csv')
 
 class TickerWindow(QWidget):
-    ticker_selected = pyqtSignal(str)
+    ticker_selected = pyqtSignal(list)
 
     def __init__(self, size, pos):
         super().__init__()
         
         self.ticker = ""
         self.setWindowTitle('S&P 500 Ticker List')
-        self.setGeometry(pos.x()-100, pos.y(), size.width(), size.height())
-
+        self.setGeometry(pos.x()-100, pos.y(), size.width(), size.height() * 2)
+        self.pos = pos
+        self.size = size
         layout = QVBoxLayout()
-
         self.list_widget = QListWidget()
         self.fill_ticker_list()
+        self.list_widget.itemClicked.connect(self.list_item_selected)
+        self.list_widget.itemDoubleClicked.connect(self.add_stock)
 
         self.button_add = QPushButton("Add", self)
         self.button_add.resize(100, 40)
         self.button_add.clicked.connect(self.add_stock)
-        self.list_widget.itemClicked.connect(self.list_item_selected)
+
         
         layout.addWidget(self.list_widget)
         layout.addWidget(self.button_add)
 
         self.setLayout(layout)
+        
+        self.closeEvent = self.on_close
+
+    def on_close(self, event):
+        self.entry_window.close()
+        event.accept()
 
     def fill_ticker_list(self):
         if os.path.exists('constituents.csv'):
             tickers = pd.read_csv('constituents.csv')
-            tickers = tickers['Symbol'].tolist()
+            ticker = tickers['Symbol']
+            name = tickers['Security']
+            tickers['all'] = ticker + ' - ' + name
+            tickers = tickers['all'].tolist()
         else:
-            tickers = sp500_tickers['Symbol'].tolist()
+            ticker = sp500_tickers['Symbol']
+            name = tickers['Security']
+            tickers['all'] = ticker + ' - ' + name
+            tickers = tickers['all'].tolist()
         self.list_widget.addItems(tickers)
 
     def list_item_selected(self):
-        self.ticker = self.list_widget.currentItem().text()
+        self.ticker = []
+        self.ticker.append(self.list_widget.currentItem().text().split(' - ')[0])
+        self.ticker.append(self.list_widget.currentItem().text().split(' - ')[1])
 
     def add_stock(self):
+
         self.ticker_selected.emit(self.ticker)
-        self.close()
+
+        self.entry_window = EntryPrice.EntryPrice(self.size, self.pos)
+        self.entry_window.show()
+
+        #self.close()
     
